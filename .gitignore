@@ -1,0 +1,48 @@
+# General
+.DS_Store
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+.pytest_cache/
+
+# Node
+node_modules/
+.npm/
+.yarn/
+
+# Next.js
+.next/
+out/
+build/
+.vercel/
+*.tsbuildinfo
+
+# Environment Variables & Secrets (CRITICAL)
+.env
+.env.*
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+!.env.example
+
+# Google & API Secrets
+client_secret_*.json
+credentials.json
+token.json
+
+# Databases
+*.db
+*.sqlite3
+backend/database.db
+backend/database_v2.db
+
+# IDES
+.vscode/
+.idea/

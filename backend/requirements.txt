@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+python-dotenv
+requests
+supabase
+httpx
+email-validator
+sqlmodel
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib
