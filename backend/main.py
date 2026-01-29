@@ -4,6 +4,7 @@ from sqlmodel import Session, select
 from typing import List
 import json
 import asyncio
+import os
 from pydantic import BaseModel
 
 from models import EmailRequest, EmailAnalysis
@@ -19,6 +20,18 @@ origins = [
     "http://localhost:3001",
 ]
 
+# Add production frontend URL
+frontend_url = os.environ.get("FRONTEND_URL")
+if frontend_url:
+    origins.append(frontend_url)
+    # Also allow variants like https/http if user puts one
+    if "https://" in frontend_url:
+        origins.append(frontend_url.replace("https://", "http://"))
+
+allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
+if allowed_origins_env:
+    origins.extend(allowed_origins_env.split(","))
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
@@ -29,6 +42,21 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    # Restore credentials from Env Vars if files don't exist (for Cloud Deployment)
+    if not os.path.exists("credentials.json"):
+        creds_content = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+        if creds_content:
+            print("Writing credentials.json from environment variable...")
+            with open("credentials.json", "w") as f:
+                f.write(creds_content)
+                
+    if not os.path.exists("token.json"):
+        token_content = os.environ.get("GOOGLE_TOKEN_JSON")
+        if token_content:
+            print("Writing token.json from environment variable...")
+            with open("token.json", "w") as f:
+                f.write(token_content)
+
     create_db_and_tables()
 
 @app.get("/health")
