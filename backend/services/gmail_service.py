@@ -25,17 +25,37 @@ def get_gmail_service():
     # created automatically when the authorization flow completes for the first
     # time.
     if os.path.exists('token.json'):
-        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        print("DEBUG: token.json found.")
+        try:
+            creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+        except Exception as e:
+            print(f"DEBUG: Error loading token.json: {e}")
+            creds = None
+    else:
+        print("DEBUG: token.json NOT found.")
     
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            print("DEBUG: Token expired, attempting refresh...")
+            try:
+                creds.refresh(Request())
+                print("DEBUG: Token refreshed successfully.")
+            except Exception as e:
+                print(f"DEBUG: Token refresh failed: {e}")
+                creds = None
+
+        if not creds or not creds.valid:
+            # Check if running on Render
+            if os.environ.get("RENDER") or os.environ.get("on_render"): # Render sets 'RENDER' usually, checking generic
+                 print("CRITICAL: Authentication failed on Render. Cannot open local browser.")
+                 print("ACTION REQUIRED: Please update the GOOGLE_TOKEN_JSON environment variable with a fresh local token.")
+                 raise RuntimeError("Authentication failed on Cloud Server. Check server logs.")
+
             if not os.path.exists('credentials.json'):
                 raise FileNotFoundError("credentials.json not found. Please download it from Google Cloud Console.")
                 
-            print("Starting OAuth flow...")
+            print("Starting OAuth flow (Local)...")
             flow = InstalledAppFlow.from_client_secrets_file(
                 'credentials.json', SCOPES)
             creds = flow.run_local_server(port=0)
