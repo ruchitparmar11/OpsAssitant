@@ -48,6 +48,24 @@ def on_startup():
     token_env = os.environ.get("GOOGLE_TOKEN_JSON")
     if token_env:
         print(f"DEBUG: GOOGLE_TOKEN_JSON found. Length: {len(token_env)}")
+        print(f"DEBUG: First 20 chars: {token_env[:20]!r}") # !r shows if there are quotes
+        try:
+            # strip extra quotes if user accidentally added them
+            clean_token = token_env.strip()
+            if clean_token.startswith("'") and clean_token.endswith("'"):
+                clean_token = clean_token[1:-1]
+            if clean_token.startswith('"') and clean_token.endswith('"') and not clean_token.startswith('"{'): 
+                 # heuristic: if it looks like a stringified json, maybe strip. 
+                 # But valid json starts with { so "{" is valid if it's just the json string.
+                 # If it is "\"{" then it is double encoded.
+                 pass
+
+            print("Writing token.json from environment variable...")
+            with open("token.json", "w") as f:
+                f.write(clean_token)
+            print("DEBUG: Successfully wrote token.json")
+        except Exception as e:
+            print(f"CRITICAL: Failed to write token.json: {e}")
     else:
         print("DEBUG: GOOGLE_TOKEN_JSON is Missing or Empty!")
 
@@ -58,13 +76,6 @@ def on_startup():
             print("Writing credentials.json from environment variable...")
             with open("credentials.json", "w") as f:
                 f.write(creds_content)
-                
-    if not os.path.exists("token.json"):
-        token_content = os.environ.get("GOOGLE_TOKEN_JSON")
-        if token_content:
-            print("Writing token.json from environment variable...")
-            with open("token.json", "w") as f:
-                f.write(token_content)
 
     create_db_and_tables()
 
