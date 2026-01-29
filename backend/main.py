@@ -42,6 +42,15 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    print("DEBUG: Startup initiated.")
+    print(f"DEBUG: Environment Keys available: {list(os.environ.keys())}")
+    
+    token_env = os.environ.get("GOOGLE_TOKEN_JSON")
+    if token_env:
+        print(f"DEBUG: GOOGLE_TOKEN_JSON found. Length: {len(token_env)}")
+    else:
+        print("DEBUG: GOOGLE_TOKEN_JSON is Missing or Empty!")
+
     # Restore credentials from Env Vars if files don't exist (for Cloud Deployment)
     if not os.path.exists("credentials.json"):
         creds_content = os.environ.get("GOOGLE_CREDENTIALS_JSON")
