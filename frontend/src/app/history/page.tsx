@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, Fragment } from "react";
+import { useState, useEffect, Fragment, Suspense } from "react";
 import {
     LayoutDashboard,
     Mail,
@@ -26,7 +26,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export default function HistoryPage() {
+function HistoryPageContent() {
     const [activeTab, setActiveTab] = useState<"history" | "inbox" | "knowledge">("history");
     const [history, setHistory] = useState<LoggedEmail[]>([]);
     const [knowledge, setKnowledge] = useState<KnowledgeItem[]>([]);
@@ -928,5 +928,20 @@ export default function HistoryPage() {
                 )}
             </main>
         </div >
+    );
+}
+
+export default function HistoryPage() {
+    return (
+        <Suspense fallback={
+            <div className="min-h-screen bg-background text-foreground flex items-center justify-center">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                    <p className="text-muted-foreground">Loading...</p>
+                </div>
+            </div>
+        }>
+            <HistoryPageContent />
+        </Suspense>
     );
 }
