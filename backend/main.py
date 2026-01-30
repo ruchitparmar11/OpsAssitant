@@ -18,6 +18,8 @@ app = FastAPI(title="AI Operations Assistant API", version="1.0.0")
 origins = [
     "http://localhost:3000", 
     "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
 ]
 
 # Add production frontend URL
@@ -42,6 +44,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
+    # Startup initiated
     print("DEBUG: Startup initiated.")
     print(f"DEBUG: Environment Keys available: {list(os.environ.keys())}")
     
