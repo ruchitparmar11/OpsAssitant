@@ -34,9 +34,20 @@ allowed_origins_env = os.environ.get("ALLOWED_ORIGINS")
 if allowed_origins_env:
     origins.extend(allowed_origins_env.split(","))
 
+# Allow all Vercel preview deployments (they follow pattern: https://ops-assitant-*.vercel.app)
+def is_allowed_origin(origin: str) -> bool:
+    """Check if origin is allowed, including Vercel preview deployments"""
+    if origin in origins:
+        return True
+    # Allow any Vercel preview deployment for this project
+    if origin.startswith("https://ops-assitant-") and origin.endswith(".vercel.app"):
+        return True
+    return False
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=origins,
+    allow_origin_regex=r"https://ops-assitant-.*\.vercel\.app",  # Allow all preview deployments
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
