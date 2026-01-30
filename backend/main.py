@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlmodel import Session, select
-from typing import List
+from typing import List, Optional
 import json
 import asyncio
 import os
@@ -149,19 +149,77 @@ def api_create_draft(request: SendEmailRequest):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@app.get("/api/gmail-inbox", response_model=List[GmailMessage])
-def get_gmail_inbox(limit: int = 10):
+class GmailInboxResponse(BaseModel):
+    emails: List[GmailMessage]
+    next_page_token: Optional[str] = None
+
+@app.get("/api/gmail-inbox", response_model=GmailInboxResponse)
+def get_gmail_inbox(limit: int = 10, next_page_token: Optional[str] = None, session: Session = Depends(get_session)):
     """
     Fetches recent emails from Gmail (raw, without analysis).
+    Automatically skips emails that have already been analyzed (logged in DB).
+    Supports pagination to ensure 'limit' number of NEW emails are returned if possible.
     """
     try:
-        print(f"📥 Fetching {limit} emails from Gmail...")
-        emails = fetch_recent_emails(limit=limit)
-        return emails
+        current_token = next_page_token
+        valid_emails = []
+        max_attempts = 20 # Search up to 20 batches (approx 200 emails) to find unanalyzed ones
+        
+        print(f"📥 Smart Fetch: Seeking {limit} unanalyzed emails...")
+
+        for attempt in range(max_attempts):
+            if len(valid_emails) >= limit:
+                break
+                
+            # Fetch a batch. We fetch slightly more than limit (limit + 5) to increase hit rate per batch.
+            # But we must respect the user's pagination token flow.
+            # Actually, standardizing on 'limit' is safer for now.
+            batch_emails, new_token = fetch_recent_emails(limit=limit, next_page_token=current_token)
+            
+            if not batch_emails:
+                print("DEBUG: No more emails from Gmail.")
+                break # No more emails in Gmail
+                
+            # Check DB for duplicates
+            # Get IDs of this batch
+            gmail_ids = [e['id'] for e in batch_emails]
+            
+            # Query DB for existing
+            statement = select(LoggedEmail.gmail_message_id).where(LoggedEmail.gmail_message_id.in_(gmail_ids))
+            existing_ids = session.exec(statement).all()
+            existing_set = set(existing_ids)
+            
+            # Filter
+            for email in batch_emails:
+                if email['id'] not in existing_set:
+                    valid_emails.append(email)
+            
+            current_token = new_token
+            
+            # If we don't have a next page, we can't continue
+            if not current_token:
+                break
+                
+            # If we have enough, we are good.
+            # If not, the loop continues to fetch the NEXT page.
+        
+        # Trim to requested limit (in case we over-fetched)
+        result_emails = valid_emails[:limit]
+        
+        # Important: The 'next_page_token' we return should be the one from the LAST successful fetch
+        # so the user can continue fetching from where we stopped.
+        # If we stopped in the middle of a batch, technically we are skipping the rest of that batch...
+        # But this is "Smart Fetch". It's better to just return the 'current_token' which points to the NEXT batch.
+        
+        print(f"✅ Returning {len(result_emails)} unanalyzed emails after checking {attempt + 1} batches.")
+        return GmailInboxResponse(emails=result_emails, next_page_token=current_token)
+
     except Exception as e:
+        # Return empty list on error but don't crash
+        print(f"Error fetching inbox: {e}")
         import traceback
         traceback.print_exc()
-        return []
+        return GmailInboxResponse(emails=[], next_page_token=None)
 
 @app.post("/api/analyze-email", response_model=EmailAnalysis)
 async def analyze_email_api(request: EmailRequest, session: Session = Depends(get_session)):

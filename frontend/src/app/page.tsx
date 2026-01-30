@@ -17,7 +17,9 @@ import {
   Zap,
   BarChart3,
   LogOut,
-  Copy
+  Copy,
+  Menu,
+  X
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { analyzeEmail, type EmailAnalysis, getHistory, type LoggedEmail, getAnalytics, type AnalyticsData, checkGmailStatus, sendReply, createDraft, logoutUser } from "@/lib/api";
@@ -33,6 +35,7 @@ export default function Dashboard() {
   const [expandedEmailId, setExpandedEmailId] = useState<number | null>(null);
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   const [emailInput, setEmailInput] = useState({
     sender: "",
@@ -90,7 +93,41 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 text-foreground flex font-sans">
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/20 text-foreground flex flex-col md:flex-row font-sans">
+
+      {/* Mobile Header */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-background/80 backdrop-blur sticky top-0 z-40">
+        <div className="flex items-center gap-2">
+          <div className="h-8 w-8 bg-gradient-to-br from-primary to-primary/80 rounded-lg flex items-center justify-center text-primary-foreground font-bold shadow-lg">AI</div>
+          <span className="font-bold text-lg">OpsAssistant</span>
+        </div>
+        <button onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="p-2 text-foreground">
+          {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        </button>
+      </div>
+
+      {/* Mobile Menu Overlay */}
+      {isMobileMenuOpen && (
+        <div className="fixed inset-0 z-30 bg-background pt-20 px-6 animate-in slide-in-from-top-10 md:hidden">
+          <nav className="flex flex-col gap-4 text-lg">
+            <Link href="/" onClick={() => setIsMobileMenuOpen(false)}>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 text-primary font-medium">
+                <LayoutDashboard size={24} /> Dashboard
+              </div>
+            </Link>
+            <Link href="/history">
+              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted font-medium cursor-pointer">
+                <Mail size={24} /> History & Knowledge
+              </div>
+            </Link>
+            <Link href="/settings">
+              <div className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted font-medium cursor-pointer">
+                <Settings size={24} /> Settings
+              </div>
+            </Link>
+          </nav>
+        </div>
+      )}
 
       {/* Sidebar */}
       <aside className="w-64 border-r border-border/50 backdrop-blur-sm bg-background/80 hidden md:flex flex-col p-6 gap-6 h-screen sticky top-0">
@@ -137,13 +174,22 @@ export default function Dashboard() {
       <main className="flex-1 p-6 md:p-10 overflow-y-auto">
 
         {/* Header */}
-        <header className="mb-10">
-          <h1 className="text-4xl font-bold tracking-tight mb-2 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Welcome back, Ruchit
-          </h1>
-          <p className="text-lg text-muted-foreground">
-            Your AI saved you <span className="text-primary font-semibold">{analytics?.time_saved_hours || 0} hours</span> this week ⚡
-          </p>
+        <header className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+          <div>
+            <h1 className="text-4xl font-bold tracking-tight mb-2 bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+              Welcome back, Ruchit
+            </h1>
+            <p className="text-lg text-muted-foreground">
+              Your AI saved you <span className="text-primary font-semibold">{analytics?.time_saved_hours || 0} hours</span> this week ⚡
+            </p>
+          </div>
+
+          <Link href="/history?tab=inbox">
+            <button className="flex items-center gap-2 px-5 py-3 bg-primary text-primary-foreground rounded-xl font-bold shadow-lg shadow-primary/20 hover:shadow-primary/30 hover:bg-primary/90 transition-all">
+              <Sparkles size={20} />
+              <span>Open Live Inbox</span>
+            </button>
+          </Link>
         </header>
 
         {/* Analytics Cards */}
@@ -206,6 +252,34 @@ export default function Dashboard() {
             </div>
           </div>
         )}
+
+        {/* Category Chart */}
+        <div className="mb-10 bg-card border border-border/50 rounded-2xl p-6 shadow-xl shadow-primary/5">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="p-2 bg-indigo-500/10 rounded-lg">
+              <BarChart3 size={20} className="text-indigo-500" />
+            </div>
+            <h2 className="text-xl font-bold">Email Category Distribution</h2>
+          </div>
+          <div className="flex items-end gap-3 h-48 mt-4">
+            {['Work', 'Lead', 'Personal', 'Invoice', 'Support', 'Spam'].map(cat => {
+              const count = history.filter(h => h.category === cat).length;
+              const total = history.length || 1;
+              const percent = Math.round((count / total) * 100);
+              const height = Math.max(5, percent); // Min 5% height
+              return (
+                <div key={cat} className="flex-1 flex flex-col justify-end items-center gap-2 group h-full">
+                  <div className="text-xs font-bold text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity mb-1">{count}</div>
+                  <div className="w-full bg-indigo-100 dark:bg-indigo-900/20 rounded-t-lg relative group-hover:bg-indigo-200 transition-colors flex items-end overflow-hidden h-full">
+                    <div style={{ height: `${height}%` }} className="bg-indigo-500 w-full transition-all duration-1000 rounded-t-lg relative">
+                    </div>
+                  </div>
+                  <span className="text-xs font-medium text-muted-foreground">{cat}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
 
         {/* Email Analysis Section */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
@@ -341,7 +415,11 @@ export default function Dashboard() {
                             "text-xs px-2 py-0.5 rounded-full font-medium",
                             email.category === "Lead" && "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300",
                             email.category === "Invoice" && "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300",
-                            email.category === "Support" && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                            email.category === "Support" && "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                            email.category === "Work" && "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300",
+                            email.category === "Personal" && "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300",
+                            email.category === "Spam" && "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300",
+                            !['Lead', 'Invoice', 'Support', 'Work', 'Personal', 'Spam'].includes(email.category) && "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
                           )}>
                             {email.category}
                           </span>
@@ -365,6 +443,11 @@ export default function Dashboard() {
                           </div>
 
                           {/* Summary & Details */}
+                          <div className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                            <p className="text-xs font-semibold text-muted-foreground mb-1">AI Summary</p>
+                            <p className="text-sm leading-relaxed">{email.summary}</p>
+                          </div>
+
                           <div className="grid grid-cols-2 gap-3">
                             <div className="p-3 bg-muted/30 rounded-lg">
                               <p className="text-xs text-muted-foreground mb-1">Sentiment</p>
@@ -521,7 +604,7 @@ export default function Dashboard() {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Link href="/history">
+          <Link href="/history?tab=history">
             <div className="p-6 bg-card border border-border/50 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-blue-500/10 rounded-lg group-hover:scale-110 transition-transform">
@@ -535,15 +618,15 @@ export default function Dashboard() {
             </div>
           </Link>
 
-          <Link href="/settings">
+          <Link href="/history">
             <div className="p-6 bg-card border border-border/50 rounded-xl hover:shadow-lg transition-all cursor-pointer group">
               <div className="flex items-center gap-3">
                 <div className="p-3 bg-purple-500/10 rounded-lg group-hover:scale-110 transition-transform">
                   <Brain size={24} className="text-purple-500" />
                 </div>
                 <div>
-                  <h4 className="font-semibold">AI Knowledge Base</h4>
-                  <p className="text-sm text-muted-foreground">Teach your AI assistant</p>
+                  <h4 className="font-semibold">Knowledge Base</h4>
+                  <p className="text-sm text-muted-foreground">Manage AI Context & Rules</p>
                 </div>
               </div>
             </div>

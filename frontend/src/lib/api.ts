@@ -77,14 +77,29 @@ export interface GmailMessage {
     body: string;
 }
 
-export async function fetchGmailInbox(limit: number): Promise<GmailMessage[]> {
+export async function fetchGmailInbox(limit: number, nextPageToken?: string | null): Promise<{ emails: GmailMessage[], nextPageToken: string | null }> {
     try {
-        const response = await fetch(`${API_BASE_URL}/api/gmail-inbox?limit=${limit}`);
+        let url = `${API_BASE_URL}/api/gmail-inbox?limit=${limit}`;
+        if (nextPageToken) {
+            url += `&next_page_token=${nextPageToken}`;
+        }
+
+        const response = await fetch(url);
         if (!response.ok) throw new Error("Failed to fetch inbox");
-        return await response.json();
+        const data = await response.json();
+
+        // Handle both old (array) and new (object) API responses for safety
+        if (Array.isArray(data)) {
+            return { emails: data, nextPageToken: null };
+        }
+
+        return {
+            emails: data.emails,
+            nextPageToken: data.next_page_token
+        };
     } catch (error) {
         console.error("Inbox API Error:", error);
-        return [];
+        return { emails: [], nextPageToken: null };
     }
 }
 

@@ -15,13 +15,29 @@ if not api_key:
     print("Warning: OPENROUTER_API_KEY not found in environment variables.")
 
 # List of free models to try (in priority order)
+import re
+import logging
+
+# Configure logging
+logging.basicConfig(
+    filename='ai_debug.log', 
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+# List of free models to try (in priority order)
+# List of free models to try (in priority order)
 FREE_MODELS = [
-    "google/gemini-2.0-flash-exp:free",
-    "microsoft/phi-4:free",
-    "google/gemini-exp-1206:free",
-    "meta-llama/llama-3.3-70b-instruct:free", 
-    "mistralai/mistral-7b-instruct:free",
-    "huggingfaceh4/zephyr-7b-beta:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemma-3-27b-it:free",
+    "qwen/qwen-2.5-vl-7b-instruct:free",
+    "mistralai/mistral-small-3.1-24b-instruct:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
+    "microsoft/phi-3-mini-128k-instruct:free",
+    "google/gemma-3-12b-it:free", # Smaller fallback
+    "meta-llama/llama-3.2-3b-instruct:free", # Tiny/Fast
+    "qwen/qwen3-coder:free", # Good for structured data
+    "deepseek/deepseek-r1-0528:free" # Experimental
 ]
 
 def analyze_email_with_openrouter(sender: str, subject: str, body: str, context: str = "", tone: str = "Professional", signature: str = "") -> EmailAnalysis:
@@ -48,8 +64,8 @@ def analyze_email_with_openrouter(sender: str, subject: str, body: str, context:
     
     Return the response in pure JSON format (no markdown code blocks) matching this schema:
     {{
-        "category": "Lead" | "Invoice" | "Support" | "Spam" | "Other",
-        "summary": "One sentence summary",
+        "category": "Work" | "Lead" | "Invoice" | "Support" | "Spam" | "Personal" | "Other",
+        "summary": "Provide a concise, one-sentence summary of the main point of the email.",
         "sentiment": "Positive" | "Neutral" | "Negative",
         "urgency": 1-10 (integer),
         "action_items": [
@@ -60,15 +76,19 @@ def analyze_email_with_openrouter(sender: str, subject: str, body: str, context:
     """
     
     last_error = None
+    logging.info(f"Starting analysis for email: {subject}")
     
     # Try each model in sequence
     for model_name in FREE_MODELS:
         try:
+            logging.info(f"Trying model: {model_name}")
             response = requests.post(
                 url="https://openrouter.ai/api/v1/chat/completions",
                 headers={
                     "Authorization": f"Bearer {api_key}",
                     "Content-Type": "application/json",
+                    "HTTP-Referer": "http://localhost:3000", # OpenRouter requirement
+                    "X-Title": "AI Operations Assistant", # OpenRouter requirement
                 },
                 json={
                     "model": model_name,
@@ -79,52 +99,70 @@ def analyze_email_with_openrouter(sender: str, subject: str, body: str, context:
                         }
                     ]
                 },
-                timeout=30
+                timeout=45 # Increased timeout
             )
             
             if response.status_code != 200:
-                print(f"❌ Model {model_name} failed with {response.status_code}: {response.text}")
+                error_msg = f"❌ Model {model_name} failed with {response.status_code}: {response.text}"
+                print(error_msg)
+                logging.error(error_msg)
                 last_error = f"{response.status_code}: {response.text}"
                 
                 # If rate limited (429), try next model
                 if response.status_code == 429:
                     print(f"Model {model_name} rate limited, trying next...")
-                    time.sleep(1)  # Brief delay before trying next model
+                    time.sleep(1)
                 continue
                 
             result = response.json()
             if 'choices' not in result or not result['choices']:
-                 print(f"❌ Invalid response from {model_name}: {result}")
+                 error_msg = f"❌ Invalid response from {model_name}: {result}"
+                 print(error_msg)
+                 logging.error(error_msg)
                  continue
                  
             text_response = result['choices'][0]['message']['content']
+            logging.info(f"Raw response from {model_name}: {text_response[:200]}...") # Log first 200 chars
             
-            # Clean up potential markdown formatting
-            if text_response.startswith("```"):
-                text_response = text_response.strip("`").replace("json", "").strip()
+            # Robust JSON extraction using regex
+            # Looks for the first occurrence of '{' and the last occurrence of '}'
+            try:
+                json_match = re.search(r'(\{[\s\S]*\})', text_response)
+                if json_match:
+                    text_response = json_match.group(1)
+                else:
+                    logging.warning("No JSON block found in response, attempting raw parse")
                 
-            data = json.loads(text_response)
-            print(f"Successfully analyzed with model: {model_name}")
-            return EmailAnalysis(**data)
+                data = json.loads(text_response)
+                print(f"Successfully analyzed with model: {model_name}")
+                logging.info("Successfully parsed JSON")
+                return EmailAnalysis(**data)
+            except json.JSONDecodeError as e:
+                logging.error(f"JSON Parse Error for {model_name}: {e}. Content: {text_response}")
+                print(f"JSON Parse Error: {e}")
+                continue # Try next model if this one returned garbage
             
         except requests.exceptions.RequestException as e:
             print(f"Error with model {model_name}: {e}")
+            logging.error(f"Request Error: {e}")
             last_error = str(e)
             continue
         except Exception as e:
             print(f"Error parsing response from {model_name}: {e}")
+            logging.error(f"General Error: {e}")
             last_error = str(e)
             continue
     
     # If all models failed, return error response
     print(f"All models failed. Last error: {last_error}")
+    logging.critical(f"All models failed. Last error: {last_error}")
     return EmailAnalysis(
-        category="Error", 
-        summary=f"All AI models unavailable. Please try again later.", 
+        category="Other", 
+        summary=f"Analysis failed. Please check logs. Last error: {str(last_error)[:100]}", 
         sentiment="Neutral", 
         urgency=5, 
-        action_items=[{"description": "Retry email analysis later", "priority": "Medium"}],
-        suggested_reply="Thank you for your email. We'll review it and get back to you shortly."
+        action_items=[{"description": "Check API Keys and network", "priority": "High"}],
+        suggested_reply="Analysis unavailable."
     )
 
 # Keep the old function name for backward compatibility
